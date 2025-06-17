@@ -1,0 +1,249 @@
+@layout()
+
+@slot('content')
+<section id="main">
+    <h1>Product</h1>
+
+    <div class="mb-3">
+        <div class="d-flex justify-content-between">
+            <button class="btn btn-primary" id="add-btn">Tambah</button>
+            <button class="btn btn-primary" id="clear-token">Logout</button>
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <table class="table" id="product-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Desc</th>
+                    <th>Price</th>
+                    <th>Stock</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+        </table>
+    </div>
+</section>
+<section id="modal">
+    <div class="modal fade" id="product-modal" tabindex="-1" aria-labelledby="product-modal" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h1 class="modal-title fs-5" id="product-modal">Product</h1>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form id="form-product" action="javascript:void(0);">
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label">Name</label>
+                            <input class="form-control" id="name" required />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Description</label>
+                            <textarea rows="5" class="form-control" id="description" required></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Price</label>
+                            <input type="number" class="form-control" id="price" required />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Stock</label>
+                            <input type="number" class="form-control" id="stock" required />
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        <button id="submit-btn" type="submit" class="btn btn-primary">Save changes</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</section>
+@endslot
+
+@slot('script')
+<script src="https://cdn.datatables.net/2.3.2/js/dataTables.js"></script>
+<script src="https://cdn.datatables.net/2.3.2/js/dataTables.bootstrap5.js"></script>
+<script>
+    const token = localStorage.getItem('token');
+
+    if (!token) {
+        window.location.replace("/login");
+    }
+</script>
+
+<script>
+    let table = new DataTable('#product-table', {
+        serverSide: true,
+        processing: true,
+        ajax: {
+            url: '/api/products',
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                'Accept': 'application/json',
+            },
+            data: function (data) {
+                const params = {
+                    draw: data.draw,
+                    page: Math.floor(data.start / data.length) + 1,
+                    limit: data.length,
+                    search: data.search.value,
+                };
+
+                return params;
+            },
+            dataFilter: function (res, type) {
+                const json = JSON.parse(res);
+                const result = {
+                    data: json.data.data,
+                    recordsTotal: json.data.meta.total,
+                    recordsFiltered: json.data.meta.total,
+                    draw: table.ajax.params().draw
+                };
+
+                return JSON.stringify(result);
+            }
+        },
+        columns: [
+            {
+                data: null,
+                name: 'product.name',
+                render: function (data, type, row, meta) {
+                    return data.name;
+                }
+            },
+            {
+                data: null,
+                name: 'product.description',
+                render: function (data, type, row, meta) {
+                    return data.description;
+                }
+            },
+            {
+                data: null,
+                name: 'product.price',
+                render: function (data, type, row, meta) {
+                    return new Intl.NumberFormat("en-US", {style: "currency", currency: "IDR"}).format(data.price);
+                }
+            },
+            {
+                data: null,
+                name: 'product.stock',
+                render: function (data, type, row, meta) {
+                    return data.stock;
+                }
+            },
+            {
+                data: null,
+                name: 'product.id',
+                width: '300',
+                render: function (data, type, row, meta) {
+                    return `
+                        <button class="edit btn btn-primary mb-1">Edit</button>
+                        <button class="delete btn btn-primary mb-1">Delete</button>
+                    `;
+                }
+            },
+        ],
+        initComplete: function () {
+            $('#product-table tbody').on('click', 'td .edit', async function () {
+                const tr = $(this).parents('tr');
+                const row = table.row(tr).data();
+
+                $.ajax({
+                    url: `/api/products/${row.id}`,
+                    method: "GET",
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                        'Accept': 'application/json',
+                    },
+                    success: function (response) {
+                        const data = response.data;
+
+                        $('#name').val(data.name);
+                        $('#description').val(data.description);
+                        $('#price').val(data.price);
+                        $('#stock').val(data.stock);
+                        $('#submit-btn').val(data.id);
+
+                        $('#product-modal').modal('show');
+                    }
+                })
+            });
+
+            $('#product-table tbody').on('click', 'td .delete', async function () {
+                const tr = $(this).parents('tr');
+                const row = table.row(tr).data();
+
+                if (confirm("Are you sure?") == true) {
+                    $.ajax({
+                        url: `/api/products/${row.id}`,
+                        method: "DELETE",
+                        headers: {
+                            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                            'Accept': 'application/json',
+                        },
+                        success: function (response) {
+                            table.draw();
+                        }
+                    })
+                }
+
+            });
+        }
+    });
+
+    $('#form-product').submit(function (e) {
+        e.preventDefault();
+
+        const payload = {
+            name: $('#name').val(),
+            description: $('#description').val(),
+            price: $('#price').val(),
+            stock: $('#stock').val(),
+        };
+
+        const id = $('#submit-btn').val();
+
+        $.ajax({
+            url: id ? `/api/products/${id}` : `/api/products`,
+            method: id ? 'PUT' : "POST",
+            data: payload,
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                'Accept': 'application/json',
+            },
+            beforeSend: function () {
+                $('#submit-btn').prop('disabled', true);
+            },
+            success: function (response) {
+                $('#product-modal').modal('hide');
+                table.draw();
+            },
+            complete: function () {
+                $('#submit-btn').prop('disabled', false);
+            }
+        })
+    });
+
+    $('#add-btn').click(function () {
+        $('#name').val(null);
+        $('#description').val(null);
+        $('#price').val(null);
+        $('#stock').val(null),
+        $('#submit-btn').val(null);
+
+        $('#product-modal').modal('show');
+    });
+
+    $('#clear-token').click(function () {
+        localStorage.clear();
+
+        window.location.replace("/login");
+    });
+</script>
+@endslot
+
+@endlayout
