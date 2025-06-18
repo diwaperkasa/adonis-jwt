@@ -14,6 +14,8 @@ const AuthFinder = withAuthFinder(() => hash.use('scrypt'), {
 })
 
 export default class User extends compose(BaseModel, AuthFinder) {
+  public static table = 'users'
+
   @hasOne(() => Role, {
     foreignKey: 'id',
     localKey: 'role_id'
@@ -54,18 +56,4 @@ export default class User extends compose(BaseModel, AuthFinder) {
   declare updatedAt: DateTime | null
 
   static accessTokens = DbAccessTokensProvider.forModel(User)
-
-  @afterCreate()
-  static async sendMail(user: User) {
-    try {
-      await mail.send((message) => {
-        message
-          .to(user.email)
-          .subject('Verify your email address')
-          .htmlView('emails/verify_email', { user })
-      })
-    } catch (error) {
-      console.error(error)
-    }
-  }
 }
