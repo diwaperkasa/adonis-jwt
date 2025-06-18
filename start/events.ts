@@ -1,7 +1,7 @@
 import emitter from '@adonisjs/core/services/emitter'
 import mail from '@adonisjs/mail/services/main'
 
-emitter.on('Product:after:save:model', async function (model) {
+emitter.on('Product:before:save:model', async function (model) {
 	console.log(model)
 })
 
